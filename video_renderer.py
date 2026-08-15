@@ -7,7 +7,7 @@ def play_video(filename, screen):
     video = cv2.VideoCapture(filename)
     fps=video.get(cv2.CAP_PROP_FPS)
 
-    if(fps<0):
+    if(fps<=0):
         print("could not determine video fps")
         video.release()
         return 

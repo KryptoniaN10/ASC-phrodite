@@ -5,4 +5,4 @@ screen = Screen(200,100)
 
 screen.clear_terminal()
 
-play_video("test.mp4", screen)
+play_video("media/bnd.mp4", screen)
