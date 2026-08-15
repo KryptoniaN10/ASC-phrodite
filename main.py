@@ -1,8 +1,8 @@
 from screen import Screen
-from image_renderer import render_image
+from video_renderer import play_video
 
-screen = Screen(80, 40)
+screen = Screen(200,100)
 
 screen.clear_terminal()
 
-render_image("boombang.png", screen)
+play_video("test.mp4", screen)
