@@ -1,6 +1,12 @@
 import sys
 import shutil
 
+try:
+    import colorama
+    colorama.just_fix_windows_console()
+except Exception:
+    pass
+
 # Reconfigure stdout to use UTF-8 to support Unicode shading blocks (░▒▓█) on all terminals
 if hasattr(sys.stdout, 'reconfigure'):
     try:
@@ -12,7 +18,7 @@ class Screen:
     def __init__(self,width,height):
         self.width=width
         self.height=height
-        self.buffer=[[" "]*width for _ in range(height)]
+        self.buffer = [[(" ", None) for _ in range(width)] for _ in range(height)]
 
     def update_size(self):
         # Query current terminal size and update buffer if changed
@@ -24,21 +30,19 @@ class Screen:
             self.width = cols
             self.height = target_height
             self.buffer = [[" "]*self.width for _ in range(self.height)]
-    def set_pixel(self,x,y,char):
+    def set_pixel(self,x,y,char,color=None):
         if x>=0 and x<self.width and y>=0 and y<self.height:
-            self.buffer[y][x]=char
+            self.buffer[y][x]=(char,color)
     def render(self):
         # Move cursor to home
         sys.stdout.write("\033[H")
-        for i, row in enumerate(self.buffer):
-            # Write the row
-            sys.stdout.write("".join(row))
-            # Clear to end of line, then add a newline if it's not the last row
-            if i < len(self.buffer) - 1:
-                sys.stdout.write("\033[K\n")
-            else:
-                sys.stdout.write("\033[K")
-
+        for row in self.buffer:
+            for char,color in row:
+                if color is None:
+                    sys.stdout.write(char)
+                else:
+                    r,g,b=color
+                    sys.stdout.write(f"\033[38;2;{r};{g};{b}m{char}\033[0m")
         # Clear any remaining lines below the rendered area
         sys.stdout.write("\033[J")
         sys.stdout.flush()
@@ -47,7 +51,7 @@ class Screen:
         sys.stdout.write("\033[2J\033[H")
         sys.stdout.flush()
     def clear_buffer(self):
-        self.buffer=[[" "]*self.width for _ in range(self.height)]
+        self.buffer = [[(" ", None) for _ in range(self.width)] for _ in range(self.height)]
     def draw_horizontal_line(self,x1,x2,y,char):
         for i in range(x1,x2+1):
             self.set_pixel(i,y,char)
