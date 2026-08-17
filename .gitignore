@@ -1,3 +1,4 @@
 # Ignore generated media files
 *.mp4
 *.png
+/ideas.md
