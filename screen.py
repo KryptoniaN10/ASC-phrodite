@@ -14,6 +14,8 @@ if hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
+_COLOR_CACHE = {}
+
 class Screen:
     def __init__(self,width,height):
         self.width=width
@@ -29,22 +31,35 @@ class Screen:
         if cols != self.width or target_height != self.height:
             self.width = cols
             self.height = target_height
-            self.buffer = [[" "]*self.width for _ in range(self.height)]
+            self.buffer = [[(" ", None) for _ in range(self.width)] for _ in range(self.height)]
     def set_pixel(self,x,y,char,color=None):
         if x>=0 and x<self.width and y>=0 and y<self.height:
             self.buffer[y][x]=(char,color)
     def render(self):
         # Move cursor to home
-        sys.stdout.write("\033[H")
-        for row in self.buffer:
-            for char,color in row:
-                if color is None:
-                    sys.stdout.write(char)
-                else:
-                    r,g,b=color
-                    sys.stdout.write(f"\033[38;2;{r};{g};{b}m{char}\033[0m")
+        chunks = ["\033[H"]
+        last_color = None
+        color_cache = _COLOR_CACHE
+        for i, row in enumerate(self.buffer):
+            for char, color in row:
+                if color != last_color:
+                    if color is None:
+                        chunks.append("\033[0m")
+                    else:
+                        ansi_code = color_cache.get(color)
+                        if ansi_code is None:
+                            ansi_code = f"\033[38;2;{color[0]};{color[1]};{color[2]}m"
+                            color_cache[color] = ansi_code
+                        chunks.append(ansi_code)
+                    last_color = color
+                chunks.append(char)
+            if i < len(self.buffer) - 1:
+                chunks.append("\n")
+        if last_color is not None:
+            chunks.append("\033[0m")
         # Clear any remaining lines below the rendered area
-        sys.stdout.write("\033[J")
+        chunks.append("\033[J")
+        sys.stdout.write("".join(chunks))
         sys.stdout.flush()
     def clear_terminal(self):
         # Clear entire screen and move cursor to home
