@@ -2,66 +2,90 @@ import cv2
 from PIL import Image
 import time
 from image_renderer import render_pillow_image
+from audio_extractor import extract_audio
+from audio_player import AudioPlayer
+
 
 def play_video(filename, screen):
     video = cv2.VideoCapture(filename)
-    video_fps=video.get(cv2.CAP_PROP_FPS)
+    video_fps = video.get(cv2.CAP_PROP_FPS)
 
-    if(video_fps<=0):
+    if video_fps <= 0:
         print("could not determine video fps")
         video.release()
-        return 
+        return
+
     frame_duration = 1 / video_fps
+
+    audio_path = extract_audio(filename)
+    audio = AudioPlayer()
+    has_audio = False
+    if audio_path:
+        try:
+            audio.load(audio_path)
+            has_audio = True
+        except Exception as e:
+            print(f"Failed to load audio: {e}")
+
+    try:
+        screen.update_size()
+    except Exception:
+        pass
+
+    if has_audio:
+        audio.play()
+
     start_time = time.perf_counter()
-    frame_count = 0
-    rendered_count = 0
+    frame_index = 0
+    current_frame = None
     try:
         while True:
-            target_time = start_time + frame_count * frame_duration
-            
-            success, frame = video.read()
-            if not success:
+            if has_audio and audio.is_finished():
                 break
 
-            frame_count += 1
+            if has_audio:
+                current_time = audio.get_position()
+            else:
+                current_time = time.perf_counter() - start_time
 
-            # Frame Dropping: If we are late by more than a frame duration, skip rendering to catch up
-            now = time.perf_counter()
-            if now > target_time + frame_duration:
+            target_frame = int(current_time * video_fps)
+
+            while frame_index <= target_frame:
+                success, frame = video.read()
+                if not success:
+                    return
+                frame_index += 1
+                current_frame = frame
+
+            if current_frame is None:
                 continue
 
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(frame_rgb)
-
-            # update terminal size so rendering always fits current terminal (throttled)
-            if frame_count % 30 == 0:
+            if frame_index % 30 == 0:
                 try:
                     screen.update_size()
                 except Exception:
                     pass
 
+            frame_rgb = cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(frame_rgb)
             render_pillow_image(img, screen)
-            rendered_count += 1
 
-            # High-Precision Sleep:
-            # Sleep for the bulk of the duration (leaving 5ms margin for Windows timer resolution)
-            now = time.perf_counter()
-            remaining = target_time - now
-            if remaining > 0.010:
-                time.sleep(remaining - 0.005)
-            # Spin-wait for the exact target time to achieve microsecond alignment
-            while time.perf_counter() < target_time:
-                pass
+            if not has_audio:
+                target_time = frame_index * frame_duration
+                now = time.perf_counter() - start_time
+                remaining = target_time - now
+                if remaining > 0.010:
+                    time.sleep(remaining - 0.005)
+                while time.perf_counter() - start_time < target_time:
+                    pass
+
     finally:
+        if has_audio:
+            audio.stop()
         video.release()
-        
-    total_time = time.perf_counter() - start_time
-    average_fps = rendered_count / total_time
-    actual_fps = frame_count / total_time
-
-    print(f"\nVideo FPS: {video_fps:.2f}")
-    print(f"Frames decoded: {frame_count}")
-    print(f"Frames rendered: {rendered_count} (Dropped: {frame_count - rendered_count})")
-    print(f"Total time: {total_time:.2f} seconds")
-    print(f"Average Render FPS: {average_fps:.2f}")
-    print(f"Actual Playback FPS: {actual_fps:.2f}")
+        if audio_path:
+            try:
+                import os
+                os.unlink(audio_path)
+            except Exception:
+                pass
